@@ -7,6 +7,9 @@ dist/
 build/
 *.spec
 
+# icon build artifacts
+AppIcon.iconset/
+
 # generated test outputs
 test_variants/
 test_v2/

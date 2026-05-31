@@ -8,7 +8,7 @@ import subprocess, sys
 from pathlib import Path
 
 from PySide6.QtCore import Qt, QThread, Signal, QMimeData
-from PySide6.QtGui import QFont, QDragEnterEvent, QDropEvent
+from PySide6.QtGui import QFont, QIcon, QDragEnterEvent, QDropEvent
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QPushButton, QLineEdit, QFileDialog, QProgressBar,
@@ -191,6 +191,12 @@ class MainWindow(QMainWindow):
         banner_layout.addWidget(self.btn_dismiss)
         layout.addWidget(self.banner)
 
+        # ── Footer ──
+        footer = QLabel("Created by Omri Behr  ·  v1.0  ·  2026")
+        footer.setAlignment(Qt.AlignCenter)
+        footer.setStyleSheet("color: gray; font-size: 10px;")
+        layout.addWidget(footer)
+
     # ── drag and drop ─────────────────────────────────────────────────────────
 
     def dragEnterEvent(self, event: QDragEnterEvent):
@@ -366,6 +372,10 @@ class MainWindow(QMainWindow):
 def main():
     app = QApplication(sys.argv)
     app.setApplicationName("Serum to Live")
+    _here = Path(getattr(sys, "_MEIPASS", Path(__file__).parent))
+    icon_path = _here / "AppIcon.icns"
+    if icon_path.exists():
+        app.setWindowIcon(QIcon(str(icon_path)))
     win = MainWindow()
     win.show()
     sys.exit(app.exec())
