@@ -1,0 +1,3 @@
+PySide6
+cbor2
+zstandard

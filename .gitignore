@@ -1,0 +1,15 @@
+.DS_Store
+__pycache__/
+*.pyc
+.venv/
+venv/
+dist/
+build/
+*.spec
+
+# generated test outputs
+test_variants/
+test_v2/
+
+# user output
+vstpresets/
