@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
 
 import converter
 
+VERSION = "1.0.1"
 
 # ── worker thread ──────────────────────────────────────────────────────────────
 
@@ -76,12 +77,14 @@ class MainWindow(QMainWindow):
         root = QWidget()
         self.setCentralWidget(root)
         layout = QVBoxLayout(root)
-        layout.setSpacing(12)
-        layout.setContentsMargins(16, 16, 16, 16)
+        layout.setSpacing(16)
+        layout.setContentsMargins(20, 20, 20, 20)
 
         # ── Input group ──
         input_group = QGroupBox("Input")
         ig = QVBoxLayout(input_group)
+        ig.setSpacing(10)
+        ig.setContentsMargins(12, 14, 12, 14)
 
         mode_row = QHBoxLayout()
         self.radio_folder = QRadioButton("Folder")
@@ -106,7 +109,7 @@ class MainWindow(QMainWindow):
         ig.addLayout(input_row)
 
         self.file_count_label = QLabel("")
-        self.file_count_label.setStyleSheet("color: gray; font-size: 11px;")
+        self.file_count_label.setStyleSheet("font-size: 11px;")
         ig.addWidget(self.file_count_label)
 
         layout.addWidget(input_group)
@@ -114,6 +117,8 @@ class MainWindow(QMainWindow):
         # ── Output group ──
         output_group = QGroupBox("Output")
         og = QVBoxLayout(output_group)
+        og.setSpacing(10)
+        og.setContentsMargins(12, 14, 12, 14)
 
         output_row = QHBoxLayout()
         self.output_edit = QLineEdit(self.DEFAULT_OUTPUT)
@@ -131,6 +136,7 @@ class MainWindow(QMainWindow):
 
         # ── Action buttons ──
         btn_row = QHBoxLayout()
+        btn_row.setSpacing(8)
         self.btn_all = QPushButton("Convert All")
         self.btn_all.setFixedHeight(36)
         self.btn_all.clicked.connect(lambda: self._start(new_only=False))
@@ -192,18 +198,31 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.banner)
 
         # ── Footer ──
-        footer = QLabel("Created by Omri Behr  ·  v1.0  ·  2026")
+        footer = QLabel(f"Created by Omri Behr  ·  v{VERSION}  ·  2026")
         footer.setAlignment(Qt.AlignCenter)
-        footer.setStyleSheet("color: gray; font-size: 10px;")
+        footer.setStyleSheet("font-size: 10px; color: palette(mid);")
         layout.addWidget(footer)
+
+    # ── dark mode ─────────────────────────────────────────────────────────────
+
+    def _is_dark(self) -> bool:
+        from PySide6.QtCore import Qt as _Qt
+        try:
+            scheme = QApplication.styleHints().colorScheme()
+            return scheme == _Qt.ColorScheme.Dark
+        except AttributeError:
+            return False
+
+    def on_scheme_changed(self):
+        # Re-apply banner styles if visible
+        if not self.banner.isHidden():
+            self._on_finished(*self._last_result)
 
     # ── drag and drop ─────────────────────────────────────────────────────────
 
     def dragEnterEvent(self, event: QDragEnterEvent):
         if event.mimeData().hasUrls():
-            urls = event.mimeData().urls()
-            # Accept if any URL is a folder or a .SerumPreset file
-            for url in urls:
+            for url in event.mimeData().urls():
                 p = Path(url.toLocalFile())
                 if p.is_dir() or p.suffix == ".SerumPreset":
                     event.acceptProposedAction()
@@ -218,7 +237,6 @@ class MainWindow(QMainWindow):
         files   = [p for p in paths if p.suffix == ".SerumPreset"]
 
         if folders:
-            # Use the first dropped folder as input
             self.radio_folder.setChecked(True)
             self.input_edit.setText(str(folders[0]))
             self._refresh_count()
@@ -314,42 +332,53 @@ class MainWindow(QMainWindow):
         self._log(msg, error=is_error)
 
     def _on_finished(self, ok, fail):
+        self._last_result = (ok, fail)
         self._set_busy(False)
         self.progress_bar.hide()
 
+        dark = self._is_dark()
         dismiss_style = (
             "QPushButton { color: %s; background: transparent; border: none;"
             " font-size: 14px; padding: 0; }"
             "QPushButton:hover { color: %s; }"
         )
+
         if fail == 0:
-            self.banner.setStyleSheet(
-                "QFrame { background: rgba(52,199,89,0.10); border: 1px solid rgba(52,199,89,0.35); border-radius: 8px; }"
-                "QLabel { color: #1a5c2a; background: transparent; border: none; }"
-            )
-            self.btn_reveal.setStyleSheet(
-                "QPushButton { color: #1a7a35; background: transparent; border: none; font-size: 12px; }"
-                "QPushButton:hover { color: #0d4d20; }"
-            )
-            self.btn_dismiss.setStyleSheet(dismiss_style % ("rgba(26,92,42,0.5)", "#1a5c2a"))
+            if dark:
+                frame_style = ("QFrame { background: rgba(52,199,89,0.15); border: 1px solid rgba(52,199,89,0.40); border-radius: 8px; }"
+                               "QLabel { color: #4ade80; background: transparent; border: none; }")
+                reveal_style = ("QPushButton { color: #4ade80; background: transparent; border: none; font-size: 12px; }"
+                                "QPushButton:hover { color: #86efac; }")
+                dismiss_s = dismiss_style % ("rgba(74,222,128,0.5)", "#4ade80")
+            else:
+                frame_style = ("QFrame { background: rgba(52,199,89,0.10); border: 1px solid rgba(52,199,89,0.35); border-radius: 8px; }"
+                               "QLabel { color: #1a5c2a; background: transparent; border: none; }")
+                reveal_style = ("QPushButton { color: #1a7a35; background: transparent; border: none; font-size: 12px; }"
+                                "QPushButton:hover { color: #0d4d20; }")
+                dismiss_s = dismiss_style % ("rgba(26,92,42,0.5)", "#1a5c2a")
             self.banner_label.setText(f"✓  {ok} preset{'s' if ok != 1 else ''} converted")
         else:
-            self.banner.setStyleSheet(
-                "QFrame { background: rgba(255,59,48,0.08); border: 1px solid rgba(255,59,48,0.30); border-radius: 8px; }"
-                "QLabel { color: #8a1f1a; background: transparent; border: none; }"
-            )
-            self.btn_reveal.setStyleSheet(
-                "QPushButton { color: #8a1f1a; background: transparent; border: none; font-size: 12px; }"
-                "QPushButton:hover { color: #5a0f0a; }"
-            )
-            self.btn_dismiss.setStyleSheet(dismiss_style % ("rgba(138,31,26,0.5)", "#8a1f1a"))
+            if dark:
+                frame_style = ("QFrame { background: rgba(255,59,48,0.12); border: 1px solid rgba(255,59,48,0.40); border-radius: 8px; }"
+                               "QLabel { color: #ff7b73; background: transparent; border: none; }")
+                reveal_style = ("QPushButton { color: #ff7b73; background: transparent; border: none; font-size: 12px; }"
+                                "QPushButton:hover { color: #fca5a5; }")
+                dismiss_s = dismiss_style % ("rgba(255,123,115,0.5)", "#ff7b73")
+            else:
+                frame_style = ("QFrame { background: rgba(255,59,48,0.08); border: 1px solid rgba(255,59,48,0.30); border-radius: 8px; }"
+                               "QLabel { color: #8a1f1a; background: transparent; border: none; }")
+                reveal_style = ("QPushButton { color: #8a1f1a; background: transparent; border: none; font-size: 12px; }"
+                                "QPushButton:hover { color: #5a0f0a; }")
+                dismiss_s = dismiss_style % ("rgba(138,31,26,0.5)", "#8a1f1a")
             self.banner_label.setText(f"✓  {ok} converted  ·  ✗  {fail} failed — see log")
 
+        self.banner.setStyleSheet(frame_style)
+        self.btn_reveal.setStyleSheet(reveal_style)
+        self.btn_dismiss.setStyleSheet(dismiss_s)
         self.banner.show()
 
     def _reveal_in_finder(self):
-        path = self.output_edit.text()
-        subprocess.run(["open", path])
+        subprocess.run(["open", self.output_edit.text()])
 
     # ── helpers ───────────────────────────────────────────────────────────────
 
@@ -372,11 +401,26 @@ class MainWindow(QMainWindow):
 def main():
     app = QApplication(sys.argv)
     app.setApplicationName("Serum to Live")
+
+    app.setStyleSheet("""
+        QPushButton {
+            border-radius: 6px;
+            padding: 2px 10px;
+        }
+    """)
+
     _here = Path(getattr(sys, "_MEIPASS", Path(__file__).parent))
     icon_path = _here / "AppIcon.icns"
     if icon_path.exists():
         app.setWindowIcon(QIcon(str(icon_path)))
+
     win = MainWindow()
+
+    try:
+        app.styleHints().colorSchemeChanged.connect(win.on_scheme_changed)
+    except AttributeError:
+        pass
+
     win.show()
     sys.exit(app.exec())
 
