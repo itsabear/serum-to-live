@@ -248,81 +248,83 @@ def _get_templates() -> _Templates:
 
 # ── Serum 1 FXP converter ─────────────────────────────────────────────────────
 
-# Serum 1 parameter index → (Serum 2 CBOR section, kParam key)
+# Serum 1 parameter index → (Serum 2 CBOR section, kParam key, scale, offset)
+# s2_value = s1_normalized * scale + offset
 # Section path uses '.' for nesting: "Oscillator0.WTOsc0" means
 # obj["Oscillator0"]["WTOsc0"]["plainParams"][key]
 _S1_PARAM_MAP = {
     # Global
-    0:  ("Global0",             "kParamMasterVolume"),
+    0:  ("Global0",             "kParamMasterVolume",  1,    0),
     # Oscillator A → Oscillator0
-    1:  ("Oscillator0",         "kParamVolume"),
-    2:  ("Oscillator0",         "kParamPan"),
-    3:  ("Oscillator0",         "kParamOctave"),
-    4:  ("Oscillator0",         "kParamTranspose"),
-    5:  ("Oscillator0",         "kParamFine"),
-    6:  ("Oscillator0",         "kParamUnison"),
-    7:  ("Oscillator0",         "kParamDetune"),
-    8:  ("Oscillator0",         "kParamDetuneWid"),
-    9:  ("Oscillator0.WTOsc0",  "kParamWarp"),
-    10: ("Oscillator0",         "kParamCoarsePit"),
-    11: ("Oscillator0.WTOsc0",  "kParamTablePos"),
-    12: ("Oscillator0.WTOsc0",  "kParamRandomPhase"),
-    13: ("Oscillator0.WTOsc0",  "kParamInitialPhase"),
+    # Volume/Warp/Phase: direct 0-1; Octave/Semi/Fine/Pan/Unison: display units
+    1:  ("Oscillator0",         "kParamVolume",        1,    0),
+    2:  ("Oscillator0",         "kParamPan",         100,  -50),   # -50..+50
+    3:  ("Oscillator0",         "kParamOctave",        8,   -4),   # -4..+4 (round)
+    4:  ("Oscillator0",         "kParamTranspose",    24,  -12),   # -12..+12 (round)
+    5:  ("Oscillator0",         "kParamFine",        200, -100),   # -100..+100 cents
+    6:  ("Oscillator0",         "kParamUnison",       16,    0),   # 0..16 (round)
+    7:  ("Oscillator0",         "kParamDetune",        1,    0),
+    8:  ("Oscillator0",         "kParamDetuneWid",   100,    0),   # 0..100%
+    9:  ("Oscillator0.WTOsc0",  "kParamWarp",          1,    0),
+    10: ("Oscillator0",         "kParamCoarsePit",     1,    0),
+    11: ("Oscillator0.WTOsc0",  "kParamTablePos",    255,    1),   # 1..256
+    12: ("Oscillator0.WTOsc0",  "kParamRandomPhase", 100,    0),   # 0..100%
+    13: ("Oscillator0.WTOsc0",  "kParamInitialPhase",  1,    0),
     # Oscillator B → Oscillator1
-    14: ("Oscillator1",         "kParamVolume"),
-    15: ("Oscillator1",         "kParamPan"),
-    16: ("Oscillator1",         "kParamOctave"),
-    17: ("Oscillator1",         "kParamTranspose"),
-    18: ("Oscillator1",         "kParamFine"),
-    19: ("Oscillator1",         "kParamUnison"),
-    20: ("Oscillator1",         "kParamDetune"),
-    21: ("Oscillator1",         "kParamDetuneWid"),
-    22: ("Oscillator1.WTOsc0",  "kParamWarp"),
-    23: ("Oscillator1",         "kParamCoarsePit"),
-    24: ("Oscillator1.WTOsc0",  "kParamTablePos"),
-    25: ("Oscillator1.WTOsc0",  "kParamRandomPhase"),
-    26: ("Oscillator1.WTOsc0",  "kParamInitialPhase"),
+    14: ("Oscillator1",         "kParamVolume",        1,    0),
+    15: ("Oscillator1",         "kParamPan",         100,  -50),
+    16: ("Oscillator1",         "kParamOctave",        8,   -4),
+    17: ("Oscillator1",         "kParamTranspose",    24,  -12),
+    18: ("Oscillator1",         "kParamFine",        200, -100),
+    19: ("Oscillator1",         "kParamUnison",       16,    0),
+    20: ("Oscillator1",         "kParamDetune",        1,    0),
+    21: ("Oscillator1",         "kParamDetuneWid",   100,    0),
+    22: ("Oscillator1.WTOsc0",  "kParamWarp",          1,    0),
+    23: ("Oscillator1",         "kParamCoarsePit",     1,    0),
+    24: ("Oscillator1.WTOsc0",  "kParamTablePos",    255,    1),
+    25: ("Oscillator1.WTOsc0",  "kParamRandomPhase", 100,    0),
+    26: ("Oscillator1.WTOsc0",  "kParamInitialPhase",  1,    0),
     # Noise → Oscillator2
-    27: ("Oscillator2",         "kParamVolume"),
-    28: ("Oscillator2",         "kParamPitch"),
-    29: ("Oscillator2",         "kParamFine"),
-    30: ("Oscillator2",         "kParamPan"),
+    27: ("Oscillator2",         "kParamVolume",        1,    0),
+    28: ("Oscillator2",         "kParamPitch",       200, -100),
+    29: ("Oscillator2",         "kParamFine",          2,   -1),
+    30: ("Oscillator2",         "kParamPan",         100,  -50),
     # Amplitude envelope (Serum 1 Env1 → Serum 2 Env0)
-    35: ("Env0",                "kParamAttack"),
-    36: ("Env0",                "kParamHold"),
-    37: ("Env0",                "kParamDecay"),
-    38: ("Env0",                "kParamSustain"),
-    39: ("Env0",                "kParamRelease"),
-    # Filter
-    45: ("VoiceFilter0",        "kParamFreq"),
-    46: ("VoiceFilter0",        "kParamReso"),
-    47: ("VoiceFilter0",        "kParamDrive"),
-    48: ("VoiceFilter0",        "kParamVar"),
-    49: ("VoiceFilter0",        "kParamWet"),
+    35: ("Env0",                "kParamAttack",        1,    0),
+    36: ("Env0",                "kParamHold",          1,    0),
+    37: ("Env0",                "kParamDecay",         1,    0),
+    38: ("Env0",                "kParamSustain",       1,    0),
+    39: ("Env0",                "kParamRelease",       1,    0),
+    # Filter (Freq 0-1 non-linear, pass through; Reso/Drive/Var 0-100)
+    45: ("VoiceFilter0",        "kParamFreq",          1,    0),
+    46: ("VoiceFilter0",        "kParamReso",        100,    0),
+    47: ("VoiceFilter0",        "kParamDrive",       100,    0),
+    48: ("VoiceFilter0",        "kParamVar",         100,    0),
+    49: ("VoiceFilter0",        "kParamWet",         100,    0),
     # Envelope 2 (Serum 1 Env2 → Serum 2 Env1)
-    51: ("Env1",                "kParamAttack"),
-    52: ("Env1",                "kParamHold"),
-    53: ("Env1",                "kParamDecay"),
-    54: ("Env1",                "kParamSustain"),
-    55: ("Env1",                "kParamRelease"),
+    51: ("Env1",                "kParamAttack",        1,    0),
+    52: ("Env1",                "kParamHold",          1,    0),
+    53: ("Env1",                "kParamDecay",         1,    0),
+    54: ("Env1",                "kParamSustain",       1,    0),
+    55: ("Env1",                "kParamRelease",       1,    0),
     # Envelope 3 (Serum 1 Env3 → Serum 2 Env2)
-    56: ("Env2",                "kParamAttack"),
-    57: ("Env2",                "kParamHold"),
-    58: ("Env2",                "kParamDecay"),
-    59: ("Env2",                "kParamSustain"),
-    60: ("Env2",                "kParamRelease"),
+    56: ("Env2",                "kParamAttack",        1,    0),
+    57: ("Env2",                "kParamHold",          1,    0),
+    58: ("Env2",                "kParamDecay",         1,    0),
+    59: ("Env2",                "kParamSustain",       1,    0),
+    60: ("Env2",                "kParamRelease",       1,    0),
     # LFO rates
-    61: ("LFO0",                "kParamRate"),
-    62: ("LFO1",                "kParamRate"),
-    63: ("LFO2",                "kParamRate"),
-    64: ("LFO3",                "kParamRate"),
+    61: ("LFO0",                "kParamRate",          1,    0),
+    62: ("LFO1",                "kParamRate",          1,    0),
+    63: ("LFO2",                "kParamRate",          1,    0),
+    64: ("LFO3",                "kParamRate",          1,    0),
     # Portamento
-    65: ("VoicePanel0",         "kParamPortamentoTime"),
-    66: ("VoicePanel0",         "kParamPortamentoCurve"),
+    65: ("VoicePanel0",         "kParamPortamentoTime",1,   0),
+    66: ("VoicePanel0",         "kParamPortamentoCurve",200,-100),
     # Oscillator enable flags
-    212: ("Oscillator0",        "kParamEnable"),
-    213: ("Oscillator1",        "kParamEnable"),
-    216: ("VoiceFilter0",       "kParamEnable"),
+    212: ("Oscillator0",        "kParamEnable",        1,    0),
+    213: ("Oscillator1",        "kParamEnable",        1,    0),
+    216: ("VoiceFilter0",       "kParamEnable",        1,    0),
 }
 
 def _read_wav_frames(path: Path) -> tuple:
@@ -496,10 +498,16 @@ def _build_s1_cbor(params: list, wt_a: str, wt_b: str, noise: str, obj_init: dic
     """Build a Serum 2 processor CBOR from Serum 1 FXP data."""
     result = copy.deepcopy(obj_init)
 
+    # Integer params (need rounding after scale)
+    _INT_PARAMS = {"kParamOctave", "kParamTranspose", "kParamUnison"}
+
     # Apply mapped synthesis parameters
-    for idx, (section_path, kparam) in _S1_PARAM_MAP.items():
+    for idx, (section_path, kparam, scale, offset) in _S1_PARAM_MAP.items():
         if idx >= len(params):
             continue
+        val = float(params[idx]) * scale + offset
+        if kparam in _INT_PARAMS:
+            val = float(round(val))
         parts = section_path.split(".")
         node = result
         for part in parts:
@@ -508,7 +516,7 @@ def _build_s1_cbor(params: list, wt_a: str, wt_b: str, noise: str, obj_init: dic
             node = node[part]
         pp = node.setdefault("plainParams", {})
         if isinstance(pp, dict):
-            pp[kparam] = float(params[idx])
+            pp[kparam] = val
 
     # Set wavetable oscillators
     for osc_key, wt_path, is_noise in [

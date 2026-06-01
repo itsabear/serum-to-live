@@ -4,7 +4,7 @@ Serum 2 → Ableton Preset Converter
 PySide6 GUI
 """
 
-import subprocess, sys
+import subprocess, sys, signal
 from pathlib import Path
 
 from PySide6.QtCore import Qt, QThread, Signal, QMimeData
@@ -407,6 +407,7 @@ class MainWindow(QMainWindow):
 def main():
     app = QApplication(sys.argv)
     app.setApplicationName("Serum to Live")
+    signal.signal(signal.SIGINT, lambda *_: app.quit())
 
     app.setStyleSheet("""
         QPushButton {
