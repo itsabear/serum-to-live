@@ -284,11 +284,12 @@ _S1_PARAM_MAP = {
     24: ("Oscillator1.WTOsc0",  "kParamTablePos",    255,    1),
     25: ("Oscillator1.WTOsc0",  "kParamRandomPhase", 100,    0),
     26: ("Oscillator1.WTOsc0",  "kParamInitialPhase",  1,    0),
-    # Noise → Oscillator2
-    27: ("Oscillator2",         "kParamVolume",        1,    0),
-    28: ("Oscillator2",         "kParamPitch",       200, -100),
-    29: ("Oscillator2",         "kParamFine",          2,   -1),
-    30: ("Oscillator2",         "kParamPan",         100,  -50),
+    # Noise → Oscillator3 (NoiseOsc3)
+    27: ("Oscillator3",         "kParamVolume",        1,    0),
+    30: ("Oscillator3",         "kParamPan",         100,  -50),
+    # Sub → Oscillator4 (SubOsc4)
+    33: ("Oscillator4",         "kParamVolume",        1,    0),
+    34: ("Oscillator4",         "kParamPan",         100,  -50),
     # Amplitude envelope (Serum 1 Env1 → Serum 2 Env0)
     35: ("Env0",                "kParamAttack",        1,    0),
     36: ("Env0",                "kParamHold",          1,    0),
@@ -324,6 +325,8 @@ _S1_PARAM_MAP = {
     # Oscillator enable flags
     212: ("Oscillator0",        "kParamEnable",        1,    0),
     213: ("Oscillator1",        "kParamEnable",        1,    0),
+    214: ("Oscillator3",        "kParamEnable",        1,    0),  # Osc N On
+    215: ("Oscillator4",        "kParamEnable",        1,    0),  # Osc S On
     216: ("VoiceFilter0",       "kParamEnable",        1,    0),
 }
 
@@ -518,16 +521,15 @@ def _build_s1_cbor(params: list, wt_a: str, wt_b: str, noise: str, obj_init: dic
         if isinstance(pp, dict):
             pp[kparam] = val
 
-    # Set wavetable oscillators
-    for osc_key, wt_path, is_noise in [
-        ("Oscillator0", wt_a,  False),
-        ("Oscillator1", wt_b,  False),
-        ("Oscillator2", noise, True),
+    # Set wavetable oscillators (Osc A and B only)
+    for osc_key, wt_path, sub_key in [
+        ("Oscillator0", wt_a, "WTOsc0"),
+        ("Oscillator1", wt_b, "WTOsc1"),
     ]:
         if wt_path:
-            s2_path, num_frames, sr = _resolve_wt(wt_path, is_noise)
+            s2_path, num_frames, sr = _resolve_wt(wt_path, is_noise=False)
             osc = result.setdefault(osc_key, {})
-            wt  = osc.setdefault("WTOsc0", {})
+            wt  = osc.setdefault(sub_key, {})
             wt.update({
                 "relativePathToWT": s2_path,
                 "numFrames":        num_frames,
@@ -536,6 +538,23 @@ def _build_s1_cbor(params: list, wt_a: str, wt_b: str, noise: str, obj_init: dic
             })
             if "flex" not in wt:
                 wt["flex"] = {}
+
+    # Set noise oscillator (Oscillator3 / NoiseOsc3)
+    if noise:
+        s2_noise_path, num_frames, sr = _resolve_wt(noise, is_noise=True)
+        # Noise path has no leading slash in Serum 2 format
+        noise_rel = s2_noise_path.lstrip("/") if s2_noise_path else noise
+        osc3 = result.setdefault("Oscillator3", {})
+        noise_osc = osc3.setdefault("NoiseOsc3", {})
+        noise_osc.update({
+            "relativePathToNoiseSample": noise_rel,
+            "numFrames":   num_frames,
+            "sampleRate":  sr,
+            "numChannels": 1,
+            "detuneFactor": 0.4758218478413068,
+        })
+        if "plainParams" not in noise_osc:
+            noise_osc["plainParams"] = {}
 
     # Build FX list
     result.setdefault("FXRack0", {})["FX"] = _build_s1_fx(params)
