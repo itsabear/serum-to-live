@@ -370,7 +370,7 @@ def _read_s1_str(raw: bytes, offset: int, length: int = 512) -> str:
 def _parse_fxp(fxp_path: Path) -> tuple:
     """
     Parse a Serum 1 .fxp file.
-    Returns (preset_name, author, params_list, wt_a, wt_b, noise).
+    Returns (preset_name, author, description, params_list, wt_a, wt_b, noise).
     """
     data = fxp_path.read_bytes()
     if data[:4] != b'CcnK':
@@ -392,18 +392,111 @@ def _parse_fxp(fxp_path: Path) -> tuple:
     wt_b  = _read_s1_str(raw, 0x3e08)
     noise = _read_s1_str(raw, 0x4008)
 
-    # Try preset name from raw bytes (more reliable than FXP header)
-    raw_name = _read_s1_str(raw, 0x4972, 32)
+    # Preset metadata stored in raw chunk
+    raw_name = _read_s1_str(raw, 0x4972, 40)
+    author   = _read_s1_str(raw, 0x49a0, 40)
+    desc     = _read_s1_str(raw, 0x49c0, 64)
     if raw_name:
         preset_name = raw_name
 
-    return preset_name, "", params, wt_a, wt_b, noise
+    return preset_name, author, desc, params, wt_a, wt_b, noise
+
+# FX definitions: (type_num, fx_key, enable_param, [(s1_param_idx, kparam, scale, offset)])
+# scale/offset: s2_value = s1_normalized * scale + offset
+# Only linear params ("=" in SYParameters.txt) are mapped; non-linear skipped
+_S1_FX = [
+    # Distortion (enable param 154)
+    (0, "FXDistortion", 154, [
+        (96, "kParamWet",   100, 0),
+        (97, "kParamDrive", 100, 0),
+    ]),
+    # Flanger (enable 155)
+    (1, "FXFlanger", 155, [
+        (103, "kParamWet",      100, 0),
+        (104, "kParamBeatSync",   1, 0),
+        (106, "kParamDepth",    100, 0),
+        (107, "kParamFeedback", 100, 0),
+        (108, "kParamWidth",    360, 0),
+    ]),
+    # Phaser (enable 156)
+    (2, "FXPhaser", 156, [
+        (109, "kParamWet",      100, 0),
+        (110, "kParamBeatSync",   1, 0),
+        (112, "kParamDepth",    100, 0),
+        (114, "kParamFeedback", 100, 0),
+        (115, "kParamWidth",    360, 0),
+    ]),
+    # Chorus (enable 157)
+    (3, "FXChorus", 157, [
+        (116, "kParamWet",      100, 0),
+        (117, "kParamBeatSync",   1, 0),
+        (122, "kParamFeedback",   1, 0),
+    ]),
+    # Delay (enable 158)
+    (4, "FXDelay", 158, [
+        (124, "kParamWet",      100, 0),
+        (127, "kParamBeatSync",   1, 0),
+        (128, "kParamLink",       1, 0),
+        (132, "kParamFeedback", 100, 0),
+        (133, "kParamOffsetL",    1, 0),
+        (134, "kParamOffsetR",    1, 0),
+    ]),
+    # Compressor (enable 159)
+    (5, "FXComp", 159, [
+        (140, "kParamMultiband",  1, 0),
+    ]),
+    # Reverb (enable 160)
+    (6, "FXReverb", 160, [
+        (81, "kParamWet",   100, 0),
+        (82, "kParamSize",  100, 0),
+        (87, "kParamWidth", 100, 0),
+    ]),
+    # EQ (enable 161)
+    (7, "FXEQ", 161, [
+        (90, "kParamReso1",  100,   0),
+        (91, "kParamReso2",  100,   0),
+        (92, "kParamGain1",   48, -24),
+        (93, "kParamGain2",   48, -24),
+    ]),
+    # FX Filter (enable 162)
+    (8, "FXFilter", 162, [
+        (141, "kParamWet",   100, 0),
+        (143, "kParamFreq",    1, 0),
+        (144, "kParamReso",  100, 0),
+        (145, "kParamDrive", 100, 0),
+        (146, "kParamVar",   100, 0),
+    ]),
+    # Hyperspace (enable 163)
+    (9, "FXHyperD", 163, [
+        (147, "kParamWet",      100, 0),
+        (149, "kParamDetune",   100, 0),
+        (151, "kParamRetrig",     1, 0),
+        (152, "kParamDimESize", 100, 0),
+        (153, "kParamDimEWet",  100, 0),
+    ]),
+]
+
+def _build_s1_fx(params: list) -> list:
+    """Build the Serum 2 FX list from Serum 1 FXP parameters."""
+    fx_list = []
+    for fx_type, fx_key, enable_idx, param_map in _S1_FX:
+        enabled = params[enable_idx] > 0.5 if enable_idx < len(params) else False
+        pp = {"kParamEnable": 1.0 if enabled else 0.0}
+        for s1_idx, kparam, scale, offset in param_map:
+            if s1_idx < len(params):
+                pp[kparam] = float(params[s1_idx]) * scale + offset
+        fx_list.append({
+            "type":           fx_type,
+            "kUIParamMixOrGain": 0.0,
+            fx_key:           {"plainParams": pp},
+        })
+    return fx_list
 
 def _build_s1_cbor(params: list, wt_a: str, wt_b: str, noise: str, obj_init: dict) -> dict:
     """Build a Serum 2 processor CBOR from Serum 1 FXP data."""
     result = copy.deepcopy(obj_init)
 
-    # Apply mapped parameters
+    # Apply mapped synthesis parameters
     for idx, (section_path, kparam) in _S1_PARAM_MAP.items():
         if idx >= len(params):
             continue
@@ -435,6 +528,9 @@ def _build_s1_cbor(params: list, wt_a: str, wt_b: str, noise: str, obj_init: dic
             })
             if "flex" not in wt:
                 wt["flex"] = {}
+
+    # Build FX list
+    result.setdefault("FXRack0", {})["FX"] = _build_s1_fx(params)
 
     result.update({
         "component":      "processor",
@@ -489,7 +585,7 @@ def convert_one(sp_path: Path, out_path: Path) -> None:
 def convert_one_fxp(fxp_path: Path, out_path: Path) -> None:
     """Convert a single Serum 1 .fxp to .vstpreset. Raises on error."""
     t = _get_templates()
-    preset_name, author, params, wt_a, wt_b, noise = _parse_fxp(fxp_path)
+    preset_name, author, desc, params, wt_a, wt_b, noise = _parse_fxp(fxp_path)
 
     obj_214 = _build_s1_cbor(params, wt_a, wt_b, noise, t.obj_init)
     comp    = _build_xfer(t.comp_meta, obj_214)
@@ -497,14 +593,14 @@ def convert_one_fxp(fxp_path: Path, out_path: Path) -> None:
     cont_obj = copy.deepcopy(t.obj_cont)
     cont_obj["presetName"]          = preset_name
     cont_obj["presetAuthor"]        = author
-    cont_obj["presetDescription"]   = ""
+    cont_obj["presetDescription"]   = desc
     cont_obj["selectedPresetPath"]  = str(fxp_path)
     cont_obj["presetHasBeenEdited"] = False
 
     cont_meta = dict(t.cont_meta)
     cont_meta["presetName"]        = preset_name
     cont_meta["presetAuthor"]      = author
-    cont_meta["presetDescription"] = ""
+    cont_meta["presetDescription"] = desc
     cont = _build_xfer(cont_meta, cont_obj)
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
