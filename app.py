@@ -17,7 +17,7 @@ from PySide6.QtWidgets import (
 
 import converter
 
-VERSION = "1.0.1"
+VERSION = "1.0.2"
 
 # ── worker thread ──────────────────────────────────────────────────────────────
 
@@ -84,7 +84,7 @@ class MainWindow(QMainWindow):
         input_group = QGroupBox("Input")
         ig = QVBoxLayout(input_group)
         ig.setSpacing(10)
-        ig.setContentsMargins(12, 14, 12, 14)
+        ig.setContentsMargins(12, 14, 12, 20)
 
         mode_row = QHBoxLayout()
         self.radio_folder = QRadioButton("Folder")
@@ -118,7 +118,7 @@ class MainWindow(QMainWindow):
         output_group = QGroupBox("Output")
         og = QVBoxLayout(output_group)
         og.setSpacing(10)
-        og.setContentsMargins(12, 14, 12, 14)
+        og.setContentsMargins(12, 14, 12, 20)
 
         output_row = QHBoxLayout()
         self.output_edit = QLineEdit(self.DEFAULT_OUTPUT)
@@ -224,7 +224,7 @@ class MainWindow(QMainWindow):
         if event.mimeData().hasUrls():
             for url in event.mimeData().urls():
                 p = Path(url.toLocalFile())
-                if p.is_dir() or p.suffix == ".SerumPreset":
+                if p.is_dir() or p.suffix in (".SerumPreset", ".fxp"):
                     event.acceptProposedAction()
                     return
         event.ignore()
@@ -234,7 +234,7 @@ class MainWindow(QMainWindow):
         paths = [Path(u.toLocalFile()) for u in urls]
 
         folders = [p for p in paths if p.is_dir()]
-        files   = [p for p in paths if p.suffix == ".SerumPreset"]
+        files   = [p for p in paths if p.suffix in (".SerumPreset", ".fxp")]
 
         if folders:
             self.radio_folder.setChecked(True)
@@ -266,7 +266,7 @@ class MainWindow(QMainWindow):
         else:
             paths, _ = QFileDialog.getOpenFileNames(
                 self, "Select presets", "",
-                "Serum Presets (*.SerumPreset)")
+                "Serum Presets (*.SerumPreset *.fxp)")
             if paths:
                 self._selected_files = [Path(p) for p in paths]
                 self.input_edit.setText(f"{len(paths)} file(s) selected")
@@ -283,8 +283,14 @@ class MainWindow(QMainWindow):
     def _refresh_count(self):
         folder = Path(self.input_edit.text())
         if folder.is_dir():
-            n = len(list(folder.rglob("*.SerumPreset")))
-            self.file_count_label.setText(f"{n} preset(s) found")
+            s2 = len(list(folder.rglob("*.SerumPreset")))
+            s1 = len(list(folder.rglob("*.fxp")))
+            parts = []
+            if s2: parts.append(f"{s2} Serum 2")
+            if s1: parts.append(f"{s1} Serum 1")
+            total = s2 + s1
+            label = f"{total} preset(s) found" + (f"  ({', '.join(parts)})" if parts else "")
+            self.file_count_label.setText(label)
 
     def _start(self, new_only: bool):
         self.banner.hide()
