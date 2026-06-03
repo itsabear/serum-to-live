@@ -276,6 +276,107 @@ _S1_WARP_TO_S2 = [
     "kPD_OSC",      # 22 Pan (no direct S2 equivalent)
 ]
 
+# Serum 1 filter type: param 44 = index/88 (89 total types, 0-88)
+# List extracted from Serum 1 binary in UI dropdown order.
+_S1_FILTER_TYPES = [
+    "MgL6",              # 0  MG Low 6
+    "LadderMg",          # 1  MG Low 12 (default)
+    "MgL18",             # 2  MG Low 18
+    "MgL24",             # 3  MG Low 24
+    "L12",               # 4  Low 6
+    "L12",               # 5  Low 12
+    "L18",               # 6  Low 18
+    "L24",               # 7  Low 24
+    "H6",                # 8  High 6
+    "N12",               # 9  Notch 12
+    "N24",               # 10 Notch 24
+    "LH12",              # 11 LH 6
+    "LH12",              # 12 LH 12
+    "LB12",              # 13 LB 12
+    "L12",               # 14 LP 12 (Low+Peak → LP char)
+    "LNH24",             # 15 LN 12
+    "HB12",              # 16 HB 12
+    "H12",               # 17 HP 12 (High+Peak → HP char)
+    "N12",               # 18 HN 12
+    "B12",               # 19 BP 12
+    "BN12",              # 20 BN 12
+    "PP12",              # 21 PP 12
+    "N12",               # 22 PN 12
+    "N24",               # 23 NN 12
+    "LBH24",             # 24 L/B/H 12
+    "LBH24",             # 25 L/B/H 24
+    "LPH24",             # 26 L/P/H 12
+    "LPH24",             # 27 L/P/H 24
+    "LNH24",             # 28 L/N/H 12
+    "LNH24",             # 29 L/N/H 24
+    "BPN12",             # 30 B/P/N 12
+    "BPN12",             # 31 B/P/N 24
+    "CombP",             # 32 Cmb +
+    "Comb2",             # 33 Cmb -
+    "CombH6P",           # 34 Cmb HL6+
+    "CombH6N",           # 35 Cmb HL6-
+    "FlangeP",           # 36 Flg +
+    "FlangeN",           # 37 Flg -
+    "FlangeHL6P",        # 38 Flg HL6+
+    "FlangeHL6N",        # 39 Flg HL6-
+    "Phase48P",          # 40 Phs 48L6+
+    "Phase48N",          # 41 Phs 48L6-
+    "Phase48H6P",        # 42 Phs 48H6+
+    "Phase48N",          # 43 Phs 48H6-
+    "Phase48H6P",        # 44 Phs 48HL6+
+    "Phase48N",          # 45 Phs 48HL6-
+    "FlangePhase12HL6P", # 46 FPhs 12HL6+
+    "FlangePhase12HL6P", # 47 FPhs 12HL6-
+    "BEQ12",             # 48 Low EQ 6
+    "BEQ12",             # 49 Low EQ 12
+    "BEQ12",             # 50 Band EQ 12
+    "BEQ12",             # 51 High EQ 6
+    "BEQ12",             # 52 High EQ 12
+    "RM",                # 53 Ring Mod
+    "RMT",               # 54 Ring Modx2
+    "Exp",               # 55 SampHold
+    "ExpBPF",            # 56 SampHold-
+    "Combs",             # 57 Combs
+    "Allpasses",         # 58 Allpasses
+    "LadderAcid",        # 59 French LP
+    "LadderEMS",         # 60 German LP
+    "ADD_BASS",          # 61 Add Bass
+    "FormantONE",        # 62 Formant-I
+    "FormantTWO",        # 63 Formant-II
+    "FormantTWB",        # 64 Formant-III
+    "BandReject",        # 65 Bandreject
+    "DistComb2LP",       # 66 Dist.Comb 1 LP
+    "DistComb2LP",       # 67 Dist.Comb 2 LP
+    "DistComb2LP",       # 68 Dist.Comb 1 BP
+    "DistComb2LP",       # 69 Dist.Comb 2 BP
+    "Scream3LP",         # 70 Scream LP
+    "Scream",            # 71 Scream BP
+    # 72-88: additional types not found in binary scan, best guesses
+    "DirtyMg",           # 72
+    "Wsp",               # 73
+    "PZ_SVF",            # 74
+    "ZDF_A",             # 75
+    "Diffuser",          # 76
+    "Reverb1",           # 77
+    "DJMixer",           # 78
+    "Phase24P",          # 79
+    "Phase24N",          # 80
+    "Phase36P",          # 81
+    "Phase36N",          # 82
+    "FlangeH6P",         # 83
+    "FlangeL6P",         # 84
+    "H18",               # 85
+    "H24",               # 86
+    "B24",               # 87
+    "HP12",              # 88
+]
+
+def _decode_s1_filter_type(val: float):
+    idx = round(val * 88)
+    if 0 <= idx < len(_S1_FILTER_TYPES):
+        return _S1_FILTER_TYPES[idx]
+    return "L12"
+
 def _decode_s1_warp(val: float):
     """Convert Serum 1 param 168/169 (WarpOscA/B) to a Serum 2 kParamWarpMenu string."""
     idx = round(val * 23)
@@ -439,7 +540,10 @@ def _parse_fxp(fxp_path: Path) -> tuple:
     if raw_name:
         preset_name = raw_name
 
-    return preset_name, author, desc, params, wt_a, wt_b, noise
+    # Macro labels (4 × 32-byte slots at 0x4a60)
+    macro_labels = [_read_s1_str(raw, 0x4a60 + i * 0x20, 32) for i in range(4)]
+
+    return preset_name, author, desc, params, wt_a, wt_b, noise, macro_labels
 
 # FX definitions: (type_num, fx_key, enable_param, [(s1_param_idx, kparam, scale, offset)])
 # scale/offset: s2_value = s1_normalized * scale + offset
@@ -599,6 +703,13 @@ def _build_s1_cbor(params: list, wt_a: str, wt_b: str, noise: str, obj_init: dic
         if "plainParams" not in noise_osc:
             noise_osc["plainParams"] = {}
 
+    # Set filter type
+    if len(params) > 44:
+        ft = _decode_s1_filter_type(params[44])
+        vf_pp = result.setdefault("VoiceFilter0", {}).setdefault("plainParams", {})
+        if isinstance(vf_pp, dict):
+            vf_pp["kParamType"] = ft
+
     # Build FX list
     result.setdefault("FXRack0", {})["FX"] = _build_s1_fx(params)
 
@@ -655,7 +766,7 @@ def convert_one(sp_path: Path, out_path: Path) -> None:
 def convert_one_fxp(fxp_path: Path, out_path: Path) -> None:
     """Convert a single Serum 1 .fxp to .vstpreset. Raises on error."""
     t = _get_templates()
-    preset_name, author, desc, params, wt_a, wt_b, noise = _parse_fxp(fxp_path)
+    preset_name, author, desc, params, wt_a, wt_b, noise, macro_labels = _parse_fxp(fxp_path)
 
     obj_214 = _build_s1_cbor(params, wt_a, wt_b, noise, t.obj_init)
     comp    = _build_xfer(t.comp_meta, obj_214)
@@ -666,6 +777,12 @@ def convert_one_fxp(fxp_path: Path, out_path: Path) -> None:
     cont_obj["presetDescription"]   = desc
     cont_obj["selectedPresetPath"]  = str(fxp_path)
     cont_obj["presetHasBeenEdited"] = False
+
+    # Write macro names to Cont chunk
+    for i, label in enumerate(macro_labels):
+        if label:
+            mac = cont_obj.setdefault(f"Macro{i}", {})
+            mac["name"] = label
 
     cont_meta = dict(t.cont_meta)
     cont_meta["presetName"]        = preset_name
