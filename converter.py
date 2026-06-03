@@ -248,6 +248,41 @@ def _get_templates() -> _Templates:
 
 # ── Serum 1 FXP converter ─────────────────────────────────────────────────────
 
+# Serum 1 warp mode: params 168/169 store mode as (index / 23), index 0 = None.
+# S2 kParamWarpMenu string for each S1 mode index.
+_S1_WARP_TO_S2 = [
+    None,           # 0  None
+    "kBendPos",     # 1  Bend +
+    "kBendNeg",     # 2  Bend -
+    "kBendPosNeg",  # 3  Bend +/-
+    "kPWM",         # 4  PWM
+    "kASYMPos",     # 5  Asym +
+    "kASYMNeg",     # 6  Asym -
+    "kASYMPosNeg",  # 7  Asym +/-
+    "kFlip",        # 8  Flip
+    "kEvenOdd",     # 9  Mirror  (closest S2 equivalent)
+    "kRemap_4",     # 10 Remap 1 (S2 has only Remap 4)
+    "kRemap_4",     # 11 Remap 2
+    "kRemap_4",     # 12 Remap 3
+    "kRemap_4",     # 13 Remap 4
+    "kQuantize",    # 14 Quantize
+    "kSync",        # 15 Sync
+    "kPD_OSC",      # 16 Windowed Sync (closest S2 equivalent)
+    "kFM_OSC",      # 17 FM OscB
+    "kFM_SUB",      # 18 FM Sub
+    "kFM_NOISE",    # 19 FM Noise
+    "kRM_OSC",      # 20 RM OscB
+    "kAM_OSC",      # 21 AM OscB
+    "kPD_OSC",      # 22 Pan (no direct S2 equivalent)
+]
+
+def _decode_s1_warp(val: float):
+    """Convert Serum 1 param 168/169 (WarpOscA/B) to a Serum 2 kParamWarpMenu string."""
+    idx = round(val * 23)
+    if idx <= 0 or idx >= len(_S1_WARP_TO_S2):
+        return None
+    return _S1_WARP_TO_S2[idx]
+
 # Serum 1 parameter index → (Serum 2 CBOR section, kParam key, scale, offset)
 # s2_value = s1_normalized * scale + offset
 # Section path uses '.' for nesting: "Oscillator0.WTOsc0" means
@@ -522,14 +557,14 @@ def _build_s1_cbor(params: list, wt_a: str, wt_b: str, noise: str, obj_init: dic
             pp[kparam] = val
 
     # Set wavetable oscillators (Osc A and B only)
-    for osc_key, wt_path, sub_key in [
-        ("Oscillator0", wt_a, "WTOsc0"),
-        ("Oscillator1", wt_b, "WTOsc1"),
-    ]:
+    warp_params = [(168, "Oscillator0", "WTOsc0", wt_a),
+                   (169, "Oscillator1", "WTOsc1", wt_b)]
+    for warp_idx, osc_key, sub_key, wt_path in warp_params:
+        osc = result.setdefault(osc_key, {})
+        wt  = osc.setdefault(sub_key, {})
+
         if wt_path:
             s2_path, num_frames, sr = _resolve_wt(wt_path, is_noise=False)
-            osc = result.setdefault(osc_key, {})
-            wt  = osc.setdefault(sub_key, {})
             wt.update({
                 "relativePathToWT": s2_path,
                 "numFrames":        num_frames,
@@ -538,6 +573,14 @@ def _build_s1_cbor(params: list, wt_a: str, wt_b: str, noise: str, obj_init: dic
             })
             if "flex" not in wt:
                 wt["flex"] = {}
+
+        # Set warp mode
+        if warp_idx < len(params):
+            warp_s2 = _decode_s1_warp(params[warp_idx])
+            if warp_s2:
+                pp = wt.setdefault("plainParams", {})
+                if isinstance(pp, dict):
+                    pp["kParamWarpMenu"] = warp_s2
 
     # Set noise oscillator (Oscillator3 / NoiseOsc3)
     if noise:
